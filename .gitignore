@@ -9,3 +9,5 @@ venv/
 htmlcov/
 *.zip
 *.pdf
+testes/
+tools/
