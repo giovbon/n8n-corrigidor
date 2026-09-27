@@ -1,0 +1,8 @@
+# Dependências de execução da API de análise (main.py).
+# Versões fixadas de propósito: uma release nova de qualquer uma destas quebra a
+# correção no meio do semestre e as notas deixam de ser reprodutíveis.
+fastapi==0.141.1
+uvicorn==0.54.0
+python-multipart==0.0.32
+pydantic==2.13.5
+ruff==0.16.9

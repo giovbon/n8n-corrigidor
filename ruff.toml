@@ -1,0 +1,43 @@
+# Régua de análise estática aplicada às entregas.
+#
+# ATENÇÃO: mudar este arquivo MUDA NOTAS. O hash do conteúdo dele entra no campo
+# `versao_regras` de cada resposta (e em cada relatório), justamente para que se
+# possa provar depois qual régua estava valendo quando a nota foi dada.
+#
+# O padrão do ruff (sem este arquivo) cobre só E4, E7, E9 e F — quase nada. A
+# seleção abaixo é um meio-termo para uso didático: pega erro real e bug provável
+# sem virar uma lista de reclamações de estilo.
+
+line-length = 100
+target-version = "py311"
+
+[lint]
+select = [
+    "E4",   # imports, colunas, etc.
+    "E7",   # comparações e expressões suspeitas (== None, etc.)
+    "E9",   # erros de runtime: sintaxe, IOError, raise inválido
+    "F",    # pyflakes: nome/import não usado, variável indefinida, redefinição
+    "W",    # avisos: escape inválido, espaço em branco no fim da linha
+    "B",    # bugbear: bugs prováveis (argumento mutável por padrão, etc.)
+    "C4",   # compreensões e literais que podem ser simplificados
+    "I",    # ordem dos imports
+    "SIM",  # simplificações (if aninhado, etc.)
+]
+
+ignore = [
+    "B008",   # chamada de função em valor padrão: o próprio FastAPI depende disso
+    "SIM108", # ternário vs if/else: preferência de estilo, não erro
+    "SIM105", # try/except/pass vs contextlib.suppress: preferência de estilo
+]
+
+exclude = [".git", "node_modules", "__pycache__", ".venv", "venv", "dist", "build"]
+
+[lint.per-file-ignores]
+# __init__.py normalmente existe só para marcar pacote: import não usado é esperado.
+"__init__.py" = ["F401"]
+# Em testes, asserts "fracos" são propositais.
+"test_*.py" = ["B011", "B015"]
+
+# Para ligar também o comprimento de linha (o critério mais discutível em
+# avaliação), acrescente "E501" à lista `select` acima — e avise os alunos, porque
+# o hash da régua muda e os critérios de nota mudam junto.

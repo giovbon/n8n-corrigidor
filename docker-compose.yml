@@ -1,0 +1,82 @@
+# n8n (orquestrador da correção) + API de análise estática (main.py).
+#
+# Mudanças em relação à versão anterior do arquivo:
+#   * a API deixou de publicar a porta 8000 no host — o n8n fala com ela pela
+#     rede interna do compose (nome do serviço: ruff-api). Se precisar depurar do
+#     host, descomente o mapeamento de porta abaixo TEMPORARIAMENTE.
+#   * a API agora é construída a partir de um Dockerfile com versões fixas, em vez
+#     de rodar "pip install" a cada subida do container.
+#   * limites de memória/processos/tmpfs, para que uma entrega enorme ou um
+#     zip bomb não derrube a máquina.
+
+services:
+  n8n:
+    # Fixe a versão que já está rodando (evita atualização surpresa no meio do
+    # semestre):  docker compose exec n8n n8n --version  →  N8N_TAG=x.y.z no .env
+    image: n8nio/n8n:${N8N_TAG:-latest}
+    ports:
+      # Só localhost. Antes ficava aberto para a rede, o que expõe o workflow,
+      # as credenciais do Drive/Sheets e as notas dos alunos.
+      - "127.0.0.1:5678:5678"
+    volumes:
+      - n8n_data:/home/node/.n8n
+    environment:
+      # Sem chave fixa, o n8n gera uma e guarda no volume: perder o volume = perder
+      # as credenciais salvas de forma irreversível. Veja .env.example antes de
+      # definir esta variável se o volume já existir.
+      - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY:-}
+      - TZ=${TZ:-America/Sao_Paulo}
+      - GENERIC_TIMEZONE=${GENERIC_TIMEZONE:-America/Sao_Paulo}
+      - N8N_SECURE_COOKIE=${N8N_SECURE_COOKIE:-false}
+      - N8N_DIAGNOSTICS_ENABLED=false
+      - N8N_LOG_LEVEL=info
+    restart: unless-stopped
+    depends_on:
+      ruff-api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1:5678/healthz/readiness >/dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 2g
+
+  ruff-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: code-evaluator-api:3.0.0
+    # Sem "ports": alcançável apenas pelo n8n, via http://ruff-api:8000/check.
+    # Para testar do host: docker compose run --rm -p 8000:8000 ruff-api
+    expose:
+      - "8000"
+    volumes:
+      # Mantém o fluxo antigo de "editar main.py e reiniciar o container".
+      # Estas duas linhas tornam o COPY do Dockerfile redundante em runtime.
+      - ./main.py:/app/main.py:ro
+      - ./ruff.toml:/app/ruff.toml:ro
+    environment:
+      - TZ=${TZ:-America/Sao_Paulo}
+      - API_TOKEN=${API_TOKEN:-}
+      - RUFF_CONFIG=/app/ruff.toml
+      - MAX_UPLOAD_MB=${MAX_UPLOAD_MB:-25}
+      # Mantenha MAX_DESCOMPACTADO_MB abaixo do tamanho do tmpfs de /tmp abaixo.
+      - MAX_DESCOMPACTADO_MB=${MAX_DESCOMPACTADO_MB:-300}
+      - MAX_MEMBROS_ZIP=${MAX_MEMBROS_ZIP:-1000}
+      - MAX_ARQUIVOS_ANALISADOS=${MAX_ARQUIVOS_ANALISADOS:-400}
+      - MAX_CHARS_CODIGO_COMPLETO=${MAX_CHARS_CODIGO_COMPLETO:-60000}
+      - RUFF_TIMEOUT_SEGUNDOS=${RUFF_TIMEOUT_SEGUNDOS:-60}
+    # Teto de disco/RAM para a extração: o ZIP e os arquivos extraídos vivem aqui.
+    tmpfs:
+      - /tmp:size=512m,mode=1777
+    mem_limit: 1g
+    pids_limit: 256
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+
+volumes:
+  n8n_data:
